@@ -9,19 +9,47 @@ import streamlit as st
 def initialize_firebase():
     """Initialize Firebase Admin SDK if not already initialized"""
     if not firebase_admin._apps:
-        # Get Firebase credentials from environment variable
-        firebase_creds_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
-        if firebase_creds_json:
+        try:
+            # Try to get credentials from Streamlit secrets (new format)
             try:
-                cred_dict = json.loads(firebase_creds_json)
-                cred = credentials.Certificate(cred_dict)
-                firebase_admin.initialize_app(cred)
-                return True
+                from streamlit import secrets
+                if 'firebase' in secrets:
+                    # Create a dictionary from the individual fields in secrets.toml
+                    cred_dict = {
+                        "type": secrets.firebase.type,
+                        "project_id": secrets.firebase.project_id,
+                        "private_key_id": secrets.firebase.private_key_id,
+                        "private_key": secrets.firebase.private_key,
+                        "client_email": secrets.firebase.client_email,
+                        "client_id": secrets.firebase.client_id,
+                        "auth_uri": secrets.firebase.auth_uri,
+                        "token_uri": secrets.firebase.token_uri,
+                        "auth_provider_x509_cert_url": secrets.firebase.auth_provider_x509_cert_url,
+                        "client_x509_cert_url": secrets.firebase.client_x509_cert_url,
+                        "universe_domain": secrets.firebase.universe_domain
+                    }
+                    cred = credentials.Certificate(cred_dict)
+                    firebase_admin.initialize_app(cred)
+                    return True
             except Exception as e:
-                st.error(f"Error initializing Firebase: {e}")
+                st.warning(f"Could not load from Streamlit secrets, trying environment variable: {e}")
+                
+            # Fall back to environment variable (original format)
+            firebase_creds_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
+            if firebase_creds_json:
+                try:
+                    cred_dict = json.loads(firebase_creds_json)
+                    cred = credentials.Certificate(cred_dict)
+                    firebase_admin.initialize_app(cred)
+                    return True
+                except Exception as e:
+                    st.error(f"Error initializing Firebase from environment: {e}")
+                    return False
+            else:
+                st.error("Firebase credentials not found in environment variables or Streamlit secrets")
                 return False
-        else:
-            st.error("Firebase credentials not found in environment variables")
+        except Exception as e:
+            st.error(f"Error initializing Firebase: {e}")
             return False
     return True
 
